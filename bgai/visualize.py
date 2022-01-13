@@ -7,7 +7,7 @@ from numpy.typing import ArrayLike
 import plotly.express as px
 import plotly.graph_objects as go
 
-from bgai.santorini import Action, Santorini, BOARD_SIZE
+from bgai.santorini import Action, Santorini
 
 
 def _discrete_color_scale(*colors):
@@ -51,13 +51,13 @@ def render_plotly(games: Santorini):
             zmax=4,
         )
  
-    fig.update_layout(plot_bgcolor="rgba(0, 0, 0, 0)", paper_bgcolor="rgba(0, 0, 0, 0)")
+    fig.update_layout(plot_bgcolor="#669C82", paper_bgcolor="rgba(0, 0, 0, 0)", xaxis_gridcolor="#669C82", yaxis_gridcolor="#669C82")
     fig.update_xaxes(showticklabels=False)
     fig.update_yaxes(showticklabels=False)
     fig.update_traces(
         xgap=10, 
         ygap=10,
-        hovertemplate='x:         %{x}<br>y:         %{y}<br>height: %{z}<br>player: %{text}<extra></extra>',
+        hovertemplate='y:         %{y}<br>x:         %{x}<br>height: %{z}<br>player: %{text}<extra></extra>',
         selector=dict(type='heatmap'),
         texttemplate="<b>%{text}</b>",
         text=pieces_format(game.pieces),

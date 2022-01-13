@@ -5,19 +5,23 @@ import logging
 log = logging.getLogger(__name__)
 
 from bgai.visualize import render_plotly_from_history
-from bgai.santorini import Action, Position, Santorini
-
-
-DIRECTIONS = tuple((i, j) for i in (-1, 0, 1) for j in (-1, 0, 1) if not (i == 0 and j == 0))
+from bgai.santorini import DIRECTIONS, Action, Position, Santorini
 
 
 class BasePlayer:
+    player_type = "base"
+
     def __init__(self, player_id: int):
         self._player_id = player_id
+    
+    def __str__(self):
+        return f"Player '{self.player_type}' with id {self._player_id}"
 
 
 class InputPlayer(BasePlayer):
-    def get_action(game: Santorini, player_id: int):
+    player_type = "input"
+
+    def get_action(game: Santorini):
 
         # Retrieve valid action from input()
 
@@ -25,71 +29,104 @@ class InputPlayer(BasePlayer):
 
 
 class RandomPlayer(BasePlayer):
-    def get_action(self, game: Santorini):
-        workers = list(game.players[self._player_id].workers)
-        random.shuffle(workers)
+    player_type = "random"
 
-        for worker in workers:
-            moves = list(DIRECTIONS)
-            random.shuffle(moves)
+    def get_random_action(self, game: Santorini):
+        workers = game.workers(self._player_id)
 
-            for i, j in moves:
-                move = Position(worker.pos.x + i, worker.pos.y + j)
+        for worker in random.sample(workers, len(workers)):
+            for move_direction in random.sample(DIRECTIONS, len(DIRECTIONS)):
+                destination = worker + move_direction
 
-                if game.is_valid_move_action(worker.pos, move):
-                    moved_game = game.apply_move_action(worker.pos, move)
+                if game.is_valid_move_action(worker, destination):
+                    moved_game = game.apply_move_action(worker, destination)
 
-                    builds = list(DIRECTIONS)
-                    random.shuffle(builds)
+                    for build_direction in random.sample(DIRECTIONS, len(DIRECTIONS)):
+                        build = destination + build_direction
 
-                    for k, l in builds:
-                        build = Position(move.x + k, move.y + l)
-
-                        if moved_game.is_valid_build_action(move, build):
-                            return Action(worker.pos, move, build)
+                        if moved_game.is_valid_build_action(destination, build):
+                            return Action(worker, destination, build)
         
         raise ValueError(f"The game did not finish, but no valid move could be found in game {game} for player {self._player_id}.")
 
+    def get_action(self, game: Santorini):
+        return self.get_random_action(game)
 
-def get_player(player_type: str, player_id: int):
-    player_type = player_type.lower()
-    if player_type == 'input':
-        return InputPlayer(player_id)
-    elif player_type == 'random':
-        return RandomPlayer(player_id)
+
+class ClimberPlayer(RandomPlayer):
+    player_type = "climber"
+
+    def get_action(self, game: Santorini):
+        for worker in game.workers(self._player_id):
+            for move_direction in DIRECTIONS:
+                destination = worker + move_direction
+
+                if game.is_valid_move_action(worker, destination):
+                    moved_game = game.apply_move_action(worker, destination)
+
+                    if game.board_readonly[worker] < moved_game.board_readonly[destination]:
+
+                        build_options = []
+                        for build_direction in DIRECTIONS:
+                            build = destination + build_direction
+
+                            if moved_game.is_valid_build_action(destination, build):
+                                worker_height = moved_game.board_readonly[destination]
+                                build_current_height = moved_game.board_readonly[build]
+                                difference = worker_height - build_current_height
+                                # Pick the heighest build spot, unless it is already 3 high
+
+                                if difference >= 0:
+                                    score = difference
+                                else:
+                                    score = -difference + 2
+                                build_options.append((build, score))
+                            
+                        if len(build_options) > 0:
+                            build, _ = min(build_options, key=lambda x: x[1])
+                            return Action(worker, destination, build)
+        
+        return self.get_random_action(game)
+
+
+PLAYER_TYPES = { c.player_type: c for c in (InputPlayer, RandomPlayer, ClimberPlayer)}
 
 
 def play_game(game, players, current_player):
     is_won = False
     history = []
 
+    log.info(f"The players are {players[0]} and {players[1]}")
+    log.info(f"The initial game state is: {game}.")
+
     while not is_won:
-        action = players[current_player].get_action(game)
-        log.info(f"Turn {len(history)} | Player {current_player} plays {action}")
+        player = players[current_player]
+        action = player.get_action(game)
+        log.info(f"Turn {len(history)} | Player {player} plays {action}")
 
         history.append(action)
 
         new_game = game.apply_action(action)
 
         current_player = (current_player + 1) % 2
-        is_won = game.is_winning_move(action.worker, action.move) or not new_game.can_move(current_player)
+        is_won = game.is_winning_move(action.worker, action.destination) or not new_game.can_move(current_player)
 
         game = new_game
     
-    log.info(f"The game is won by player {current_player}.")
+    log.info(f"The game is won by player {player}.")
     
     return tuple(history)
 
 
 @click.command()
-@click.argument("player_a", type=click.Choice(["input", "random"], case_sensitive=False))
-@click.argument("player_b", type=click.Choice(["input", "random"], case_sensitive=False))
+@click.argument("player_a", type=click.Choice(PLAYER_TYPES.keys(), case_sensitive=False))
+@click.argument("player_b", type=click.Choice(PLAYER_TYPES.keys(), case_sensitive=False))
 @click.option("--html", default=None, type=click.Path(resolve_path=True))
 def cli(player_a, player_b, html):
     log.info(f"Called the cli with arguments: {player_a}, {player_b}, {html}")
 
-    players = (get_player(player_a, 0), get_player(player_b, 1))
-    game = Santorini.random_board_init()
+    players = PLAYER_TYPES[player_a](0), PLAYER_TYPES[player_b](1)
+    game = Santorini.random_init()
     start_player = random.randint(0, 1)
 
     log.info("Playing the game...")
