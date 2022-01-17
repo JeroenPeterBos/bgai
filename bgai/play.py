@@ -64,15 +64,15 @@ class ClimberPlayer(RandomPlayer):
                 if game.is_valid_move_action(worker, destination):
                     moved_game = game.apply_move_action(worker, destination)
 
-                    if game.board_readonly[worker] < moved_game.board_readonly[destination]:
+                    if game._board[worker] < moved_game._board[destination]:
 
                         build_options = []
                         for build_direction in DIRECTIONS:
                             build = destination + build_direction
 
                             if moved_game.is_valid_build_action(destination, build):
-                                worker_height = moved_game.board_readonly[destination]
-                                build_current_height = moved_game.board_readonly[build]
+                                worker_height = moved_game._board[destination]
+                                build_current_height = moved_game._board[build]
                                 difference = worker_height - build_current_height
                                 # Pick the heighest build spot, unless it is already 3 high
 

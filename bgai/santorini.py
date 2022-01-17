@@ -1,12 +1,14 @@
 import random
+from tokenize import Name
 from typing import NamedTuple, Tuple
 from itertools import combinations, product
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
 
 
+SAFE_MODE = True
 BOARD_SIZE = 5
 BOARD_SHAPE = BOARD_SIZE, BOARD_SIZE
 BOARD_PLACES = tuple(product(range(BOARD_SIZE), repeat=2))
@@ -24,6 +26,9 @@ class Position(NamedTuple):
     
     def move(self, source: 'Position', destination: 'Position') -> 'Position':
         return destination if self == source else self
+
+    def is_adjacent(self, other: 'Position'):
+        return self != other and -1 <= self.x - other.x <= 1 and -1 <= self.y - other.y <= 1
     
     def __add__(self, other: object):
         return Position(self.y + other[0], self.x + other[1])
@@ -50,16 +55,17 @@ class Action(NamedTuple):
     build: Position
 
 
-class Santorini(NamedTuple):
+@dataclass(frozen=True, eq=False)
+class Santorini:
     player_0: Player
     player_1: Player
 
     # This is the board view, it should only be used for reading from the board, it is not immutable so be carefull `Santorini.board` will give a safe copy of the board.
-    board_readonly: npt.NDArray
+    _board: npt.NDArray = field(default_factory=lambda: np.zeros(shape=BOARD_SHAPE, dtype=np.int_))
 
     @property
     def board(self) -> npt.NDArray:
-        return self.board_readonly.copy()
+        return self._board.copy()
 
     @property
     def pieces(self) -> npt.NDArray:
@@ -89,25 +95,28 @@ class Santorini(NamedTuple):
         ), axis=0)
 
     def is_occupied(self, pos: Position):
-        return self.board_readonly[pos] == 4 or pos in self.workers()
-    
-    def is_unoccupied(self, pos: Position):
-        return not self.is_occupied(pos)
+        return self._board[pos] == 4 or pos in self.workers()
     
     def is_on_board(self, pos: Position):
         return all(0 <= direction < BOARD_SIZE for direction in pos)
 
     def is_valid_move_action(self, worker: Position, destination: Position):
-        return self.is_on_board(destination) and self.board_readonly[worker] >= self.board_readonly[destination] - 1 and self.is_unoccupied(destination)
+        if SAFE_MODE and not worker.is_adjacent(destination):
+            return False
+
+        return self.is_on_board(destination) and self._board[worker] >= self._board[destination] - 1 and not self.is_occupied(destination)
 
     def is_valid_build_action(self, worker: Position, build: Position):
-        return self.is_on_board(build) and self.is_unoccupied(build)
+        if SAFE_MODE and not worker.is_adjacent(build):
+            return False
+        
+        return self.is_on_board(build) and not self.is_occupied(build)
 
     def is_valid_action(self, action: Action):
         return self.is_valid_move_action(action.worker, action.destination) and self.is_valid_build_action(action.worker, action.build)
     
     def is_winning_move(self, worker: Position, move: Position):
-        return self.board_readonly[worker] == 2 and self.board_readonly[move] == 3
+        return self._board[worker] == 2 and self._board[move] == 3
     
     def can_move(self, player: int):
         return any(self.is_valid_move_action(worker, worker + d) for worker in self.players[player].workers for d in DIRECTIONS)
@@ -122,6 +131,15 @@ class Santorini(NamedTuple):
     
     def apply_action(self, action: Action):
         return self.apply_move_action(action.worker, action.destination).apply_build_action(action.build)
+
+    def __key(self):
+        return self.player_0, self.player_1, self._board.tostring()
+
+    def __eq__(self, __o: object) -> bool:
+        return isinstance(__o, Santorini) and self.__key() == __o.__key()
+    
+    def __hash__(self) -> int:
+        return hash(self.__key())
 
     @staticmethod
     def random_init(random_board: bool = False):
