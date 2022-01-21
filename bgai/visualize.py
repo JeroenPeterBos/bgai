@@ -40,7 +40,7 @@ def render_plotly(games: Santorini):
         )
         
         for i, game in enumerate(games):
-            fig.frames[i].data[0].text = pieces_format(game.pieces)
+            fig.frames[i].data[0].text = pieces_format(game.worker_array())
     else:
         game = games
         fig = px.imshow(
@@ -60,7 +60,7 @@ def render_plotly(games: Santorini):
         hovertemplate='y:         %{y}<br>x:         %{x}<br>height: %{z}<br>player: %{text}<extra></extra>',
         selector=dict(type='heatmap'),
         texttemplate="<b>%{text}</b>",
-        text=pieces_format(game.pieces),
+        text=pieces_format(game.worker_array()),
         textfont_size=42
     )
     

@@ -19,7 +19,7 @@ class Position(NamedTuple):
     y: int
     x: int
 
-    def as_array(self) -> npt.NDArray:
+    def __array__(self) -> npt.NDArray:
         array = np.zeros(shape=BOARD_SHAPE, dtype=np.int_)
         array[self] = 1
         return array
@@ -41,9 +41,6 @@ class Player(NamedTuple):
     @property
     def workers(self) -> Tuple[Position]:
         return self.worker_0, self.worker_1
-    
-    def as_array(self) -> npt.NDArray:
-        return np.stack((worker.as_array() for worker in self.workers), axis=0)
     
     def move_worker(self, worker: Position, destination: Position) -> 'Player':
         return Player(self.worker_0.move(worker, destination), self.worker_1.move(worker, destination))
@@ -68,7 +65,14 @@ class Santorini:
         return self._board.copy()
 
     @property
-    def pieces(self) -> npt.NDArray:
+    def players(self):
+        return self.player_0, self.player_1
+    
+    @property
+    def workers(self):
+        return self.player_0.workers + self.player_1.workers
+    
+    def worker_array(self) -> npt.NDArray:
         pieces = -np.ones(shape=BOARD_SHAPE, dtype=np.int_)
         
         for i, player in enumerate(self.players):
@@ -76,26 +80,28 @@ class Santorini:
                 pieces[worker] = i
         
         return pieces
+ 
+    def __key(self):
+        # Somehow np.ndarray.tostring() returns bytes not a string...
+        return self.player_0, self.player_1, self._board.tostring()
 
-    @property
-    def players(self):
-        return self.player_0, self.player_1
+    def __eq__(self, __o: object) -> bool:
+        return isinstance(__o, Santorini) and self.__key() == __o.__key()
     
-    def workers(self, player_id=None):
-        if player_id is not None:
-            return self.players[player_id].workers
-        else:
-            return self.player_0.workers + self.player_1.workers
-    
-    def as_array(self):
-        return np.concatenate((
-            self.player_0.as_array(),
-            self.board.reshape(1, BOARD_SIZE, BOARD_SIZE),
-            self.player_1.as_array()
-        ), axis=0)
+    def __hash__(self) -> int:
+        return hash(self.__key())
+
+    def __array__(self):
+        return np.stack((
+            self.player_0.worker_0, 
+            self.player_0.worker_1,
+            self.board,
+            self.player_1.worker_0,
+            self.player_1.worker_1
+        ))
 
     def is_occupied(self, pos: Position):
-        return self._board[pos] == 4 or pos in self.workers()
+        return self._board[pos] == 4 or pos in self.workers
     
     def is_on_board(self, pos: Position):
         return all(0 <= direction < BOARD_SIZE for direction in pos)
@@ -131,15 +137,6 @@ class Santorini:
     
     def apply_action(self, action: Action):
         return self.apply_move_action(action.worker, action.destination).apply_build_action(action.build)
-
-    def __key(self):
-        return self.player_0, self.player_1, self._board.tostring()
-
-    def __eq__(self, __o: object) -> bool:
-        return isinstance(__o, Santorini) and self.__key() == __o.__key()
-    
-    def __hash__(self) -> int:
-        return hash(self.__key())
 
     @staticmethod
     def random_init(random_board: bool = False):

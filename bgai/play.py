@@ -32,7 +32,7 @@ class RandomPlayer(BasePlayer):
     player_type = "random"
 
     def get_random_action(self, game: Santorini):
-        workers = game.workers(self._player_id)
+        workers = game.players[self._player_id].workers
 
         for worker in random.sample(workers, len(workers)):
             for move_direction in random.sample(DIRECTIONS, len(DIRECTIONS)):
@@ -57,7 +57,7 @@ class ClimberPlayer(RandomPlayer):
     player_type = "climber"
 
     def get_action(self, game: Santorini):
-        for worker in game.workers(self._player_id):
+        for worker in game.players[self._player_id].workers:
             for move_direction in DIRECTIONS:
                 destination = worker + move_direction
 
