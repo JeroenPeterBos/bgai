@@ -4,6 +4,7 @@ dependencies:
   - python=3.8
   - pip==21.3.1
   - numpy==1.22.0
+  - scipy==1.7.3
   - ipykernel==6.6.1
   - plotly==5.5.0
   - nbformat==5.1.3
