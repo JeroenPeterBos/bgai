@@ -1,5 +1,6 @@
 from multiprocessing.sharedctypes import Value
 import random
+from bgai.alphazero import mcts
 from bgai.santorini import Santorini
 
 import logging
@@ -35,7 +36,7 @@ class RandomFinisherPlayer(BasePlayer):
         return random.choice(tuple(game.get_legal_actions()))
 
 
-class ClimberPlayer(RandomPlayer):
+class ClimberPlayer(BasePlayer):
     player_type = "climber"
 
     def get_action(self, game: Santorini):
@@ -45,6 +46,13 @@ class ClimberPlayer(RandomPlayer):
             return max(actions, key=lambda a: game._board[a.build] - 3 * (game._board[a.build] > game._board[a.destination]))
         except ValueError:
             return random.choice(tuple(game.get_legal_actions()))
+
+
+class MctsPlayer(BasePlayer):
+    player_type = 'mcts'
+
+    def get_action(self, game: Santorini):
+        return mcts(game)
 
 
 class InputPlayer(BasePlayer):
@@ -57,4 +65,4 @@ class InputPlayer(BasePlayer):
         return 
 
 
-PLAYER_TYPES = { c.player_type: c for c in (InputPlayer, RandomPlayer, RandomFinisherPlayer, ClimberPlayer)}
+PLAYER_TYPES = { c.player_type: c for c in (InputPlayer, RandomPlayer, RandomFinisherPlayer, ClimberPlayer, MctsPlayer)}

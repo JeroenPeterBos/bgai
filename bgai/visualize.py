@@ -1,4 +1,5 @@
 import enum
+from sqlite3 import Timestamp
 from typing import Iterable, List, Tuple, Union
 from os.path import expanduser
 
@@ -25,24 +26,21 @@ BLOCK_COLORS = _discrete_color_scale(
 )
 
 
-def game_as_marker_array(game: Santorini, markers: Tuple[str] = None):
-    if markers == None:
-        markers = ('0', '1')
-
+def game_as_marker_array(game: Santorini):
     board = np.empty(shape=BOARD_SHAPE, dtype=np.str_)
 
-    for player, marker in zip(game.players, markers):
+    for player in game.players:
         for worker in player.workers:
-            board[worker] = marker
+            board[worker] = player.marker
     
     return board
 
 
-def render_plotly(timesteps: List[Tuple[Santorini, Tuple[str]]]):
-    if isinstance(timesteps, List):
-        init_game, init_markers = timesteps[0]
+def render_plotly(timesteps: List[Santorini]):
+    if isinstance(timesteps, list):
+        init_game = timesteps[0]
         fig = px.imshow(
-            np.stack(tuple(game.board for game, _ in timesteps)), 
+            np.stack(tuple(game.board for game in timesteps)), 
             aspect="equal",
             color_continuous_scale=BLOCK_COLORS,
             zmin=0,
@@ -50,10 +48,10 @@ def render_plotly(timesteps: List[Tuple[Santorini, Tuple[str]]]):
             animation_frame=0
         )
         
-        for i, (game, markers) in enumerate(timesteps):
-            fig.frames[i].data[0].text = game_as_marker_array(game, markers)
+        for i, game in enumerate(timesteps):
+            fig.frames[i].data[0].text = game_as_marker_array(game)
     else:
-        init_game, init_markers = timesteps[0]
+        init_game = timesteps
         fig = px.imshow(
             init_game.board, 
             aspect="equal",
@@ -71,22 +69,35 @@ def render_plotly(timesteps: List[Tuple[Santorini, Tuple[str]]]):
         hovertemplate='y:         %{y}<br>x:         %{x}<br>height: %{z}<br>player: %{text}<extra></extra>',
         selector=dict(type='heatmap'),
         texttemplate="<b>%{text}</b>",
-        text=game_as_marker_array(init_game, init_markers),
+        text=game_as_marker_array(init_game),
         textfont_size=42
     )
     
     return fig
 
 
-def render_plotly_from_history(game: Santorini, history: Iterable[Action], markers: Tuple[str]):
-    timesteps = [(game, markers)]
+def render_history(game: Santorini, history: Iterable[Action]):
+    timesteps = [game]
 
     for action in history:
         game = game.apply_legal_action(action)
-        markers = markers[::-1]
-        timesteps.append((game, markers))
+        timesteps.append(game)
     
     return render_plotly(timesteps)
+
+def render_path(path, show=True):
+    timesteps = []
+
+    for node in path:
+        timesteps.append(node.game)
+    
+    fig = render_plotly(timesteps)
+
+    if show:
+        fig.show()
+    
+    return fig
+
 
 if __name__ == '__main__':
     fig = render_plotly(
