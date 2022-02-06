@@ -24,9 +24,6 @@ class Position(NamedTuple):
         array[self] = 1
         return array
     
-    def move(self, source: 'Position', destination: 'Position') -> 'Position':
-        return destination if self == source else self
-
     def is_adjacent(self, other: 'Position'):
         return self != other and -1 <= self.x - other.x <= 1 and -1 <= self.y - other.y <= 1
     
@@ -43,7 +40,9 @@ class Player(NamedTuple):
         return self.worker_0, self.worker_1
     
     def move_worker(self, worker: Position, destination: Position) -> 'Player':
-        return Player(self.worker_0.move(worker, destination), self.worker_1.move(worker, destination))
+        worker_0 = destination if self.worker_0 == worker else self.worker_0
+        worker_1 = destination if self.worker_1 == worker else self.worker_1
+        return Player(worker_0, worker_1)
 
 
 class Action(NamedTuple):
@@ -72,15 +71,60 @@ class Santorini:
     def workers(self):
         return self.player_0.workers + self.player_1.workers
     
-    def worker_array(self) -> npt.NDArray:
-        pieces = -np.ones(shape=BOARD_SHAPE, dtype=np.int_)
+    def is_occupied(self, pos: Position):
+        return self._board[pos] == 4 or pos in self.workers
+    
+    def is_on_board(self, pos: Position):
+        return all(0 <= axis < BOARD_SIZE for axis in pos)
+
+    def is_winning_action(self, action: Action):
+        return self._board[action.worker] == 2 and self._board[action.destination] == 3
+
+    def has_legal_action(self):
+        try:
+            next(self.get_legal_actions())
+            return True
+        except StopIteration:
+            return False
+
+    def is_legal_action(self, action: Action, safe=SAFE_MODE):
+        if safe:
+            if not action.worker in self.player_0.workers:
+                # The selected worker does not exist for the current player.
+                return False
+            
+            if not action.worker.is_adjacent(action.destination) or not action.destination.is_adjacent(action.build):
+                # The selected move destination or build location is not within reach
+                return False
+            
+        if not self.is_on_board(action.destination) or self.is_occupied(action.destination) or not self._board[action.worker] >= self._board[action.destination] - 1:
+            # It is not legal to move to the selected position
+            return False
         
-        for i, player in enumerate(self.players):
-            for worker in player.workers:
-                pieces[worker] = i
+        if not self.is_on_board(action.build) or (self.is_occupied(action.build) and action.worker != action.build):
+            # It is not legal to build on the selected position
+            return False
         
-        return pieces
- 
+        return True
+    
+    def get_legal_actions(self):
+        for worker in self.player_0.workers:
+            for move_direction in DIRECTIONS:
+                for build_direction in DIRECTIONS:
+                    action = Action(
+                        worker,
+                        worker + move_direction,
+                        worker + move_direction + build_direction
+                    )
+
+                    if self.is_legal_action(action):
+                        yield action
+    
+    def apply_legal_action(self, action):
+        board = self.board
+        board[action.build] += 1
+        return Santorini(self.player_1, self.player_0.move_worker(action.worker, action.destination), board)
+
     def __key(self):
         # Somehow np.ndarray.tostring() returns bytes not a string...
         return self.player_0, self.player_1, self._board.tostring()
@@ -100,43 +144,7 @@ class Santorini:
             self.player_1.worker_1
         ))
 
-    def is_occupied(self, pos: Position):
-        return self._board[pos] == 4 or pos in self.workers
-    
-    def is_on_board(self, pos: Position):
-        return all(0 <= direction < BOARD_SIZE for direction in pos)
 
-    def is_valid_move_action(self, worker: Position, destination: Position):
-        if SAFE_MODE and not worker.is_adjacent(destination):
-            return False
-
-        return self.is_on_board(destination) and self._board[worker] >= self._board[destination] - 1 and not self.is_occupied(destination)
-
-    def is_valid_build_action(self, worker: Position, build: Position):
-        if SAFE_MODE and not worker.is_adjacent(build):
-            return False
-        
-        return self.is_on_board(build) and not self.is_occupied(build)
-
-    def is_valid_action(self, action: Action):
-        return self.is_valid_move_action(action.worker, action.destination) and self.is_valid_build_action(action.worker, action.build)
-    
-    def is_winning_move(self, worker: Position, move: Position):
-        return self._board[worker] == 2 and self._board[move] == 3
-    
-    def can_move(self, player: int):
-        return any(self.is_valid_move_action(worker, worker + d) for worker in self.players[player].workers for d in DIRECTIONS)
-    
-    def apply_build_action(self, pos: Position):
-        board = self.board
-        board[pos] += 1
-        return Santorini(self.player_0, self.player_1, board)
-    
-    def apply_move_action(self, worker: Position, move: Position):
-        return Santorini(self.player_0.move_worker(worker, move), self.player_1.move_worker(worker, move), self.board)
-    
-    def apply_action(self, action: Action):
-        return self.apply_move_action(action.worker, action.destination).apply_build_action(action.build)
 
     @staticmethod
     def random_init(random_board: bool = False):

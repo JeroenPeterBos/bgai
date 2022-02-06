@@ -1,5 +1,5 @@
 import enum
-from typing import Iterable, List, Union
+from typing import Iterable, List, Tuple, Union
 from os.path import expanduser
 
 import numpy as np
@@ -7,7 +7,7 @@ from numpy.typing import ArrayLike
 import plotly.express as px
 import plotly.graph_objects as go
 
-from bgai.santorini import Action, Santorini
+from bgai.santorini import BOARD_SHAPE, Action, Santorini
 
 
 def _discrete_color_scale(*colors):
@@ -25,13 +25,24 @@ BLOCK_COLORS = _discrete_color_scale(
 )
 
 
-def render_plotly(games: Santorini):
-    pieces_format = np.vectorize(lambda x: '' if x < 0 else str(x))
+def game_as_marker_array(game: Santorini, markers: Tuple[str] = None):
+    if markers == None:
+        markers = ('0', '1')
 
-    if isinstance(games, Iterable):
-        game = games[0]
+    board = np.empty(shape=BOARD_SHAPE, dtype=np.str_)
+
+    for player, marker in zip(game.players, markers):
+        for worker in player.workers:
+            board[worker] = marker
+    
+    return board
+
+
+def render_plotly(timesteps: List[Tuple[Santorini, Tuple[str]]]):
+    if isinstance(timesteps, List):
+        init_game, init_markers = timesteps[0]
         fig = px.imshow(
-            np.stack(tuple(game.board for game in games)), 
+            np.stack(tuple(game.board for game, _ in timesteps)), 
             aspect="equal",
             color_continuous_scale=BLOCK_COLORS,
             zmin=0,
@@ -39,12 +50,12 @@ def render_plotly(games: Santorini):
             animation_frame=0
         )
         
-        for i, game in enumerate(games):
-            fig.frames[i].data[0].text = pieces_format(game.worker_array())
+        for i, (game, markers) in enumerate(timesteps):
+            fig.frames[i].data[0].text = game_as_marker_array(game, markers)
     else:
-        game = games
+        init_game, init_markers = timesteps[0]
         fig = px.imshow(
-            game.board, 
+            init_game.board, 
             aspect="equal",
             color_continuous_scale=BLOCK_COLORS,
             zmin=0,
@@ -60,28 +71,29 @@ def render_plotly(games: Santorini):
         hovertemplate='y:         %{y}<br>x:         %{x}<br>height: %{z}<br>player: %{text}<extra></extra>',
         selector=dict(type='heatmap'),
         texttemplate="<b>%{text}</b>",
-        text=pieces_format(game.worker_array()),
+        text=game_as_marker_array(init_game, init_markers),
         textfont_size=42
     )
     
     return fig
 
 
-def render_plotly_from_history(game: Santorini, history: Iterable[Action]):
-    games = [game]
+def render_plotly_from_history(game: Santorini, history: Iterable[Action], markers: Tuple[str]):
+    timesteps = [(game, markers)]
 
     for action in history:
-        game = game.apply_action(action)
-        games.append(game)
+        game = game.apply_legal_action(action)
+        markers = markers[::-1]
+        timesteps.append((game, markers))
     
-    return render_plotly(games)
+    return render_plotly(timesteps)
 
 if __name__ == '__main__':
     fig = render_plotly(
         [
-            Santorini.random_board_init(random_board=True),
-            Santorini.random_board_init(random_board=True),
-            Santorini.random_board_init(random_board=True),
+            (Santorini.random_init(random_board=True), None),
+            (Santorini.random_init(random_board=True), None),
+            (Santorini.random_init(random_board=True), None),
         ]
     )
 
