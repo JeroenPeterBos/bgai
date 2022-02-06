@@ -103,6 +103,10 @@ class Santorini:
     def current_player(self):
         return self.players[self.current_player_id]
     
+    @property
+    def non_current_player(self):
+        return self.players[(self.turn + 1) % 2]
+    
     def is_occupied(self, pos: Position):
         return self._board[pos] == 4 or pos in self.workers
     
@@ -173,14 +177,6 @@ class Santorini:
     def __hash__(self) -> int:
         return hash(self.__key())
 
-    def __array__(self):
-        return np.stack((
-            self.current_player.worker_0, 
-            self.current_player.worker_1,
-            self.board,
-            self.players[1 - self.current_player_id].worker_0,
-            self.players[1 - self.current_player_id].worker_1,
-        ))
 
     def render(self):
         from visualize import render_plotly

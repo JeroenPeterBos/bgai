@@ -42,6 +42,33 @@ class Node:
             return 0
 
 
+class SantoriniTracker:
+    POLICY_SHAPE = (2, BOARD_SIZE, BOARD_SIZE, BOARD_SIZE, BOARD_SIZE)
+
+    def __init__(self):
+        self.states = []
+        self.visits = []
+    
+    def track_statistics(self, game: Santorini, root: Node):
+        game_array = np.stack((
+            game.current_player.worker_0,
+            game.current_player.worker_1,
+            game.board,
+            game.non_current_player.worker_0,
+            game.non_current_player.worker_1
+        ))
+
+        total_visits = sum(map(lambda c: c.visit_count, root.children.values()))
+        visits_array = np.zeros(shape=self.POLICY_SHAPE, dtype=np.int_)
+        for action, child in root.children.items():
+            visits_array[action.as_tuple()] = child.visit_count / total_visits
+
+        self.states.append(game_array)
+        self.visits.append(visits_array)
+
+
+
+
 def mcts(game: Santorini):
     root = Node(game)
     expand(root, add_exploration_noise=True)
@@ -68,14 +95,14 @@ def mcts(game: Santorini):
             log.info(f"MCTS SIM {s} | Best child value {max(map(lambda c: c.value, root.children.values())):.3f} | Average depth {_path_depth_sum / (s + 1): .3f} | Most visited {max(map(lambda c: c.visit_count, root.children.values())) / (s + 1):.3f} ({len(root.children)})")
 
     if game.turn < NUM_SAMPLING_MOVES:
-        log.info("Selecting softmax sampling move.")
         # Select action proportional to softmax of visit count
         actions, visit_counts = zip(*tuple((action, child.visit_count) for action, child in root.children.items()))
-        return actions[np.random.choice(len(actions), p=scipy.special.softmax(visit_counts))]
+        action = actions[np.random.choice(len(actions), p=scipy.special.softmax(visit_counts))]
     else:
-        log.info("Selecting most visited action.")
         # Select the action that was visited most often
-        return max(root.children.keys(), key=lambda action: root.children[action].visit_count)
+        action = max(root.children.keys(), key=lambda action: root.children[action].visit_count)
+    
+    return action, root
 
 
 def expand(node: Node, add_exploration_noise: bool = False):
@@ -107,3 +134,16 @@ def ucb(parent: Node, child: Node):
     u = exploration_rate * child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
     return child.value + u
+
+
+def selfplay():
+    tracker = SantoriniTracker()
+    game = Santorini()
+    is_terminal = False
+
+    while not is_terminal:
+        action, root = mcts(game)
+        game = game.apply_legal_action(action)
+        tracker.track_statistics(game, root)
+
+
