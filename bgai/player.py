@@ -1,6 +1,6 @@
 from multiprocessing.sharedctypes import Value
 import random
-from bgai.alphazero import mcts
+from bgai.alphazero.mcts import mcts
 from bgai.santorini import Santorini
 
 import logging

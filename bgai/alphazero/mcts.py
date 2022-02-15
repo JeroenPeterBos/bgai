@@ -11,7 +11,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-SIMULATIONS = 2000
+SIMULATIONS = 100
 NUM_SAMPLING_MOVES = 0
 
 C_BASE = 19652
@@ -40,33 +40,6 @@ class Node:
             return self.value_sum / self.visit_count
         else:
             return 0
-
-
-class SantoriniTracker:
-    POLICY_SHAPE = (2, BOARD_SIZE, BOARD_SIZE, BOARD_SIZE, BOARD_SIZE)
-
-    def __init__(self):
-        self.states = []
-        self.visits = []
-    
-    def track_statistics(self, game: Santorini, root: Node):
-        game_array = np.stack((
-            game.current_player.worker_0,
-            game.current_player.worker_1,
-            game.board,
-            game.non_current_player.worker_0,
-            game.non_current_player.worker_1
-        ))
-
-        total_visits = sum(map(lambda c: c.visit_count, root.children.values()))
-        visits_array = np.zeros(shape=self.POLICY_SHAPE, dtype=np.int_)
-        for action, child in root.children.items():
-            visits_array[action.as_tuple()] = child.visit_count / total_visits
-
-        self.states.append(game_array)
-        self.visits.append(visits_array)
-
-
 
 
 def mcts(game: Santorini):
@@ -134,16 +107,3 @@ def ucb(parent: Node, child: Node):
     u = exploration_rate * child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
     return child.value + u
-
-
-def selfplay():
-    tracker = SantoriniTracker()
-    game = Santorini()
-    is_terminal = False
-
-    while not is_terminal:
-        action, root = mcts(game)
-        game = game.apply_legal_action(action)
-        tracker.track_statistics(game, root)
-
-
