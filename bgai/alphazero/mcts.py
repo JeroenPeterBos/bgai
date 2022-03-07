@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from typing import Dict, Tuple
 
 from bgai.santorini import BOARD_SHAPE, BOARD_SIZE, Santorini
+from bgai.visualize import render_path
 
 import logging
 log = logging.getLogger(__name__)
-
 
 SIMULATIONS = 100
 NUM_SAMPLING_MOVES = 0
@@ -64,8 +64,8 @@ def mcts(game: Santorini):
             n.visit_count += 1
             n.value_sum += value if n.game.current_player_id == expanded_player_id else -value
         
-        if (s + 1) % (SIMULATIONS // 10) == 0:
-            log.info(f"MCTS SIM {s} | Best child value {max(map(lambda c: c.value, root.children.values())):.3f} | Average depth {_path_depth_sum / (s + 1): .3f} | Most visited {max(map(lambda c: c.visit_count, root.children.values())) / (s + 1):.3f} ({len(root.children)})")
+        if log.isEnabledFor(logging.DEBUG) and (s + 1) % (SIMULATIONS // 10) == 0 :
+            log.debug(f"MCTS SIM {s} | Best child value {max(map(lambda c: c.value, root.children.values())):.3f} | Average depth {_path_depth_sum / (s + 1): .3f} | Most visited {max(map(lambda c: c.visit_count, root.children.values())) / (s + 1):.3f} ({len(root.children)})")
 
     if game.turn < NUM_SAMPLING_MOVES:
         # Select action proportional to softmax of visit count
@@ -87,18 +87,22 @@ def expand(node: Node, add_exploration_noise: bool = False):
         # Softmax applied only over legal moves
         policy = {action: math.exp(policy_logits[action.as_tuple(node.game)]) for action in node.game.get_legal_actions()}
         policy_sum = sum(policy.values())
-        for action, p in policy.items():
-            prior = p / policy_sum
 
-            if add_exploration_noise:
-                prior *= 1 - ROOT_EXPLORATION_FRACTION
-                prior += np.random.gamma(ROOT_DIRICHLET_ALPHA, 1, 1) * ROOT_EXPLORATION_FRACTION
+        if policy:
+            for action, p in policy.items():
+                prior = p / policy_sum
 
-            node.children[action] = Node(
-                game=node.game.apply_legal_action(action), 
-                terminal=node.game.is_winning_action(action),
-                prior=prior
-            )
+                if add_exploration_noise:
+                    prior *= 1 - ROOT_EXPLORATION_FRACTION
+                    prior += np.random.gamma(ROOT_DIRICHLET_ALPHA, 1, 1) * ROOT_EXPLORATION_FRACTION
+
+                node.children[action] = Node(
+                    game=node.game.apply_legal_action(action),
+                    terminal=node.game.is_winning_action(action),
+                    prior=prior
+                )
+        else:
+            raise ValueError("Did not find any legal actions in non-terminal node")
     return value
 
 

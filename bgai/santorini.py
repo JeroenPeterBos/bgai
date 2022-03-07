@@ -4,6 +4,9 @@ from typing import NamedTuple, Tuple
 from itertools import combinations, product
 from dataclasses import dataclass, field
 
+# @functools.cache is only available from python3.9 but it is equivalent to @lru_cache(maxsize=None)
+from functools import cached_property, lru_cache
+
 import numpy as np
 import numpy.typing as npt
 
@@ -114,8 +117,9 @@ class Santorini:
         return all(0 <= axis < BOARD_SIZE for axis in pos)
 
     def is_winning_action(self, action: Action):
-        return self._board[action.worker] == 2 and self._board[action.destination] == 3
+        return (self._board[action.worker] == 2 and self._board[action.destination] == 3) or not self.apply_legal_action(action).has_legal_action
 
+    @cached_property
     def has_legal_action(self):
         try:
             next(self.get_legal_actions())
@@ -156,6 +160,7 @@ class Santorini:
                     if self.is_legal_action(action, safe=False):
                         yield action
     
+    # @lru_cache(maxsize=None)
     def apply_legal_action(self, action):
         board = self.board
         board[action.build] += 1
@@ -163,7 +168,7 @@ class Santorini:
         return Santorini(
             self.player_0.move_worker(action.worker, action.destination) if self.current_player_id == 0 else self.player_0, 
             self.player_1.move_worker(action.worker, action.destination) if self.current_player_id == 1 else self.player_1, 
-            board, 
+            board,
             self.turn + 1
         )
 
@@ -179,8 +184,8 @@ class Santorini:
 
 
     def render(self):
-        from visualize import render_plotly
-        fig = render_plotly((self, None))
+        from bgai.visualize import render_plotly
+        fig = render_plotly(self)
         fig.show()
 
     @staticmethod
