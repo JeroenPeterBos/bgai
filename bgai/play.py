@@ -26,7 +26,7 @@ def play_game(game: Santorini, players: Tuple[BasePlayer]):
 
         log.info(f"Turn {len(history)} | {player} plays {action} out of {len(tuple(game.get_legal_actions()))} possibilities.")
 
-        is_won = game.is_winning_action(action) or not new_game.has_legal_action()
+        is_won = game.is_winning_action(action) or not new_game.has_legal_action
         
         history.append(action)
         game = new_game

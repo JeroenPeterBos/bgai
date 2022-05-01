@@ -52,7 +52,7 @@ class MctsPlayer(BasePlayer):
     player_type = 'mcts'
 
     def get_action(self, game: Santorini):
-        return mcts(game)
+        return mcts(game)[0]
 
 
 class InputPlayer(BasePlayer):
